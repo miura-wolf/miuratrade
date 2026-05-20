@@ -1,127 +1,161 @@
-# TradingView Gratis 📈
+# MiuraTrade 📈🐺
 
-> **Una alternativa open-source y 100% gratis a TradingView Pro, pensada para LATAM.**
-> Velas en vivo, indicadores propios, watchlist, multi-timeframe — sin pagar USD, sin login, sin ads.
-
-Plataforma de charts crypto construida sobre los datos públicos de **Binance** (WebSocket) y la misma librería de render que usa TradingView ([`lightweight-charts`](https://github.com/tradingview/lightweight-charts)).
+> **Open-source crypto trading dashboard with live charts, strategy scoring, and smart scanning.**
+> Fork of [tradingview-gratis](https://github.com/outlinersclub-cpu/tradingview-gratis) with enhanced indicators, signal engine, and scanner.
 
 ---
 
 ## ✨ Features
 
-- 📊 **Velas en vivo** vía WebSocket de Binance (sin API key)
-- 🔍 **Búsqueda de símbolo** sobre todos los pares USDT del exchange
+### Charts & Data
+- 📊 **Live candles** via Binance WebSocket (no API key)
+- 🔍 **Symbol search** across all USDT pairs
 - ⏱️ **Multi-timeframe**: 1m / 5m / 15m / 1h / 4h / 1d / 1w
-- 📐 **Indicadores client-side**: EMA 20/50/200, RSI 14, MACD 12/26/9, Volumen
-- 👁️ **Watchlist** con precios y cambio 24h actualizándose en tiempo real
-- 🎨 **Visual idéntica a TradingView** (paleta, fuentes, layout)
-- 💾 **Persistencia** en localStorage (símbolo, timeframe, indicadores)
-- 🔌 **Reconexión robusta** del WebSocket con backoff exponencial
-- 🌐 100% client-side — deploy estático en Vercel/Cloudflare
+- 🎨 **TradingView-identical visuals** (palette, fonts, layout)
+- 📐 **Measure tool** — click two points to measure price change, duration, and %
 
-## 🚀 Empezar
+### Indicators
+- 📈 **Standard indicators**: EMA 20/50/200, SMA 20, RSI 14, MACD 12/26/9, ATR 14, Volume, Breakout Levels
+- 🧠 **OakScriptJS indicators** — computed via [oakscriptJS](https://github.com/deepentropy/oakscriptJS) (PineScript-compatible TA library)
+- ⚙️ **Configurable parameters** — all indicator settings editable via dialog (periods, multipliers, thresholds)
+
+### Strategy & Scoring *(private fork only)*
+- 🐢 **Turtle Miura composite strategy** — trend + breakout + momentum + volatility scoring (0-100)
+- 🏷️ **Signal states**: HIGH PRIORITY / STRONG / WATCH / WEAK / AVOID
+- 📊 **Strategy Score Panel** — floating score breakdown on chart
+- 🎖️ **Strategy Score Badge** — inline state badge on chart
+
+### Scanner & Watchlist
+- 👁️ **Live watchlist** with prices and 24h change via WebSocket
+- 🔴 **Signal state badges** per row (color-coded: green/yellow/orange/red)
+- 📊 **Mini component bars** (trend/breakout/momentum/volatility per pair)
+- 🔄 **Auto-scan** with configurable interval (1m / 5m / 15m / 30m / 1h)
+- 📋 **Sort by** score, trend, breakout, momentum, or relative strength
+- 🔎 **Signal Detail Panel** — expandable breakdown per pair
+- 🏆 **Relative Strength View** — ranking view with tabs (RS / Trend / Breakout / Momentum)
+
+### Infrastructure
+- 💾 **Persistence** in localStorage (symbol, timeframe, indicators, watchlist, auto-scan prefs)
+- 🔌 **Robust WebSocket reconnection** with exponential backoff
+- ⚡ **BarData streaming** — incremental updates via oakscriptJS BarData (no full recalc on each tick)
+- 🖥️ **HLines rendering** — reference price levels (RSI 30/50/70, etc.) rendered as price lines
+- 🌐 100% client-side — static deploy on Vercel/Cloudflare
+
+---
+
+## 🚀 Getting Started
 
 ```bash
 npm install
 npm run dev
 ```
 
-Abrí [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000).
+
+---
 
 ## 🛠️ Stack
 
-| Capa | Tech |
-|---|---|
-| Framework | Next.js 16 (App Router) |
-| Lenguaje | TypeScript |
-| Estilos | Tailwind CSS 4 + shadcn/ui |
+| Layer | Tech |
+|-------|------|
+| Framework | Next.js 16 (App Router, Turbopack) |
+| Language | TypeScript |
+| Styles | Tailwind CSS 4 + shadcn/ui |
 | Charts | [lightweight-charts](https://github.com/tradingview/lightweight-charts) v5 |
-| Estado | Zustand (con persistencia) |
-| Iconos | lucide-react |
-| Datos | Binance Public REST + WebSocket |
+| TA Library | [oakscriptJS](https://github.com/deepentropy/oakscriptJS) v0.2.8 |
+| State | Zustand (with persist middleware) |
+| Icons | lucide-react |
+| Data | Binance Public REST + WebSocket |
+| Testing | Vitest |
 
-## 📐 Arquitectura
+---
+
+## 📐 Architecture
 
 ```
 src/
 ├── app/
-│   ├── layout.tsx          # Root, fuente Inter, TooltipProvider, dark
-│   ├── page.tsx            # Dashboard armando el layout
-│   └── globals.css         # Paleta TradingView
+│   ├── layout.tsx
+│   ├── page.tsx                    # Dashboard layout
+│   ├── globals.css
+│   └── api/binance/[...path]/      # Binance REST proxy
 ├── components/
 │   ├── chart/
-│   │   ├── PriceChart.tsx     # Chart core (lightweight-charts + panes)
-│   │   ├── SymbolSelector.tsx # Búsqueda de pares USDT
+│   │   ├── PriceChart.tsx          # Chart core (LWC + panes + indicators)
+│   │   ├── SymbolSelector.tsx      # Pair search
 │   │   ├── TimeframeSelector.tsx
-│   │   └── IndicatorMenu.tsx  # Toggle EMA/RSI/MACD/Volume
+│   │   ├── IndicatorMenu.tsx       # Toggle indicators
+│   │   ├── IndicatorPill.tsx
+│   │   ├── IndicatorSettingsDialog.tsx  # Configure all indicator params
+│   │   ├── MeasureOverlay.tsx      # Price/duration measurement
+│   │   ├── StrategyScorePanel.tsx  # Score breakdown panel
+│   │   └── StrategyScoreBadge.tsx  # Signal state badge
 │   ├── layout/
 │   │   ├── Header.tsx
-│   │   ├── LeftSidebar.tsx    # Iconos drawing tools (visual)
+│   │   ├── LeftSidebar.tsx
 │   │   ├── RightSidebar.tsx
-│   │   └── BottomPanel.tsx    # Stats 24h
+│   │   └── BottomPanel.tsx         # 24h stats
 │   ├── watchlist/
-│   │   └── Watchlist.tsx      # Precios live multi-símbolo
-│   └── ui/                    # shadcn primitives
-└── lib/
-    ├── binance/
-    │   ├── rest.ts            # klines / ticker / exchangeInfo
-    │   ├── ws.ts              # WS multiplex + auto-reconnect
-    │   └── types.ts
-    ├── indicators/
-    │   └── index.ts           # SMA, EMA, RSI (Wilder), MACD
-    ├── store/
-    │   └── chart-store.ts     # Zustand global state
-    └── format.ts              # formatPrice / formatPct / formatVolume
+│   │   ├── Watchlist.tsx           # Live watchlist + signal states
+│   │   ├── PairSelector.tsx        # Multi-select pair picker
+│   │   ├── SignalDetailPanel.tsx   # Expandable signal breakdown
+│   │   └── RelativeStrengthView.tsx # Ranking view
+│   └── ui/                         # shadcn primitives
+├── lib/
+│   ├── binance/
+│   │   ├── rest.ts                 # klines / ticker / exchangeInfo
+│   │   ├── ws.ts                   # WS multiplex + auto-reconnect
+│   │   ├── ticker.ts               # All USDT tickers
+│   │   └── types.ts
+│   ├── indicators/
+│   │   └── index.ts                # Legacy indicators (LWC-indicators)
+│   ├── oakscript/
+│   │   ├── index.ts                # OakScriptJS barrel
+│   │   ├── renderer.ts             # IndicatorResult → LWC series
+│   │   └── indicators/             # Strategy indicators (private)
+│   ├── signal/
+│   │   └── engine.ts               # Signal engine (private)
+│   ├── store/
+│   │   ├── chart-store.ts          # Chart + indicator state
+│   │   └── scanner-store.ts        # Scanner + auto-scan state
+│   └── format.ts
+└── hooks/
+    └── useScanner.ts               # Scanner hook + auto-scan
 ```
 
-## 🌐 Deploy a Vercel
+---
+
+## 🧪 Testing
+
+```bash
+npm test
+```
+
+Integration tests cover the full pipeline: candle data → indicator calculation → signal scoring → ranking.
+
+---
+
+## 🌐 Deploy to Vercel
 
 ```bash
 npm i -g vercel
 vercel
 ```
 
-O conectá el repo en [vercel.com/new](https://vercel.com/new) y deploy automático. No hay variables de entorno — todo es cliente.
+Or connect the repo at [vercel.com/new](https://vercel.com/new) for auto-deploy. No environment variables needed — everything is client-side.
 
-## 🧠 Cómo funciona
+---
 
-### Datos históricos
-Al abrir un símbolo se hace un `GET /api/v3/klines` (REST) que trae las últimas **1000 velas** del par + timeframe activo. Se renderizan instantáneamente.
+## 🔒 Private vs Public
 
-### Datos en vivo
-Una única conexión WebSocket multiplexada (`stream.binance.com`) recibe:
-- `<symbol>@kline_<interval>` → updates de la vela actual + cierre de velas
-- `<symbol>@miniTicker` → tickers del watchlist
+This repo contains the **public** version with stubs for the proprietary strategy files. The full MiuraTurtle strategy implementation (indicators, signal engine, renderer) is available in the private fork.
 
-Al reconectarse (Binance corta el WS cada 24h) se vuelven a suscribir todos los streams activos con backoff exponencial.
+---
 
-### Indicadores
-Se calculan **client-side** sobre el array de velas en cada update. Implementaciones puras de TypeScript:
-- `EMA`: seeded con SMA del primer período, luego `close * k + prev * (1-k)`
-- `RSI`: Wilder (suavizado exponencial sobre ganancias/pérdidas, período 14)
-- `MACD`: EMA(12) − EMA(26), signal = EMA(9) sobre MACD line
+## 📄 License
 
-Para 1000 velas y panes múltiples el costo es despreciable.
+MIT — use it, fork it, monetize it, whatever you want.
 
-## ⚠️ Qué NO incluye (todavía)
+`lightweight-charts` is Apache 2.0 with attribution to TradingView — attribution lives in the footer/UI per license requirement.
 
-- ❌ Pine Script (propietario de TradingView, no se puede clonar)
-- ❌ Drawing tools persistentes (Fibo, trend lines arrastrables)
-- ❌ Replay bar-by-bar
-- ❌ Alertas server-side (siguiente video de la serie)
-- ❌ Trading real (bot con API privada — video 4)
-
-## 📺 Serie de videos
-
-Este repo es la base de la serie **"TradingView Gratis"**:
-
-1. ✅ **Video 1 — Base**: lo que ves acá
-2. 🔜 **Video 2 — Alertas**: Supabase + Telegram bot
-3. 🔜 **Video 3 — Indicadores AI**: SuperTrend, Ichimoku, custom con Claude
-4. 🔜 **Video 4 — Bot que opera**: API privada Binance + ejecución
-
-## 📄 Licencia
-
-MIT — usalo, forkealo, monetizalo, lo que quieras.
-
-`lightweight-charts` es Apache 2.0 con atribución a TradingView — la atribución vive en el footer/UI por requerimiento de la licencia.
+`oakscriptJS` is MIT licensed.

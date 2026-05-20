@@ -1,6 +1,6 @@
 import type { Candle, SymbolInfo, Ticker24h, Timeframe } from "./types";
 
-const BASE = "https://api.binance.com/api/v3";
+const BASE = "/api/binance";
 
 export async function fetchKlines(
   symbol: string,

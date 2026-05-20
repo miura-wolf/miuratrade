@@ -1,0 +1,15 @@
+https://tradingview.github.io/lightweight-charts/docs
+https://github.com/tradingview/lightweight-charts
+https://www.reddit.com/r/TradingView/
+https://github.com/tradingview/awesome-tradingview?tab=readme-ov-file#lightweight-charts
+https://github.com/deepentropy/lightweight-charts-indicators
+https://github.com/slicedsilver/lwc-plugin-visible-price-range-util
+https://github.com/trash-and-fire/lightweight-charts-react-wrapper
+https://github.com/bergusman/tradingview-udf-binance-node
+https://www.tradingview.com/free-charting-libraries/
+https://github.com/bergusman/tradingview-jsapi-binance
+https://github.com/deepentropy/oakscriptJS
+https://github.com/pAulseperformance/awesome-pinescript
+https://tradingview.github.io/lightweight-charts/plugin-examples/
+https://github.com/tradingview/lightweight-charts/tree/master/plugin-examples
+https://github.com/adrianhajdin/coinpulse

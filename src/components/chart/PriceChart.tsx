@@ -7,6 +7,7 @@ import {
   LineSeries,
   HistogramSeries,
   CrosshairMode,
+  LineStyle,
   type IChartApi,
   type ISeriesApi,
   type IPriceLine,
@@ -14,7 +15,7 @@ import {
 } from "lightweight-charts";
 import { fetchKlines } from "@/lib/binance/rest";
 import { getBinanceWS } from "@/lib/binance/ws";
-import { ema, rsi, macd } from "@/lib/indicators";
+import { ema, sma, rsi, macd, atr, breakoutLevels } from "@/lib/indicators";
 import type { Candle, Timeframe } from "@/lib/binance/types";
 import {
   INDICATOR_COLORS,
@@ -24,6 +25,24 @@ import {
 import { formatPrice, formatVolume } from "@/lib/format";
 import { IndicatorPill } from "./IndicatorPill";
 import { MeasureOverlay } from "./MeasureOverlay";
+import { BarData, type Bar } from "oakscriptjs";
+import {
+  trendIndicator,
+  breakoutIndicator,
+  momentumIndicator,
+  volatilityIndicator,
+  turtleMiuraIndicator,
+  type TurtleMiuraResult,
+} from "@/lib/oakscript/indicators";
+import {
+  renderIndicatorResult,
+  removeRenderedIndicator,
+  updateRenderedSeries,
+  updateLastRenderedBar,
+  type RenderedIndicator,
+} from "@/lib/oakscript/renderer";
+import { StrategyScorePanel } from "./StrategyScorePanel";
+import { StrategyScoreBadge } from "./StrategyScoreBadge";
 
 interface MeasurePoint {
   time: number;
@@ -79,11 +98,13 @@ interface LastValues {
   ema20?: number;
   ema50?: number;
   ema200?: number;
+  sma20?: number;
   rsi?: number;
   macd?: number;
   macdSignal?: number;
   macdHist?: number;
   volume?: number;
+  atr?: number;
 }
 
 interface PaneOffset {
@@ -95,18 +116,31 @@ export function PriceChart({ symbol, timeframe }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const [candlesState, setCandlesState] = useState<Candle[]>([]);
   const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const ema20Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const ema50Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const ema200Ref = useRef<ISeriesApi<"Line"> | null>(null);
+  const sma20Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const rsiRef = useRef<ISeriesApi<"Line"> | null>(null);
   const rsi30Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const rsi70Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const macdRef = useRef<ISeriesApi<"Line"> | null>(null);
   const macdSignalRef = useRef<ISeriesApi<"Line"> | null>(null);
   const macdHistRef = useRef<ISeriesApi<"Histogram"> | null>(null);
+  const atrRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const breakoutHighRef = useRef<IPriceLine | null>(null);
+  const breakoutLowRef = useRef<IPriceLine | null>(null);
   const candlesRef = useRef<Candle[]>([]);
   const priceLinesMapRef = useRef<Map<string, IPriceLine>>(new Map());
+  // oakscriptJS strategy indicator refs
+  const barDataRef = useRef<BarData | null>(null);
+  const tmTrendRenderRef = useRef<RenderedIndicator | null>(null);
+  const tmBreakoutRenderRef = useRef<RenderedIndicator | null>(null);
+  const tmMomentumRenderRef = useRef<RenderedIndicator | null>(null);
+  const tmVolatilityRenderRef = useRef<RenderedIndicator | null>(null);
+  const tmStrategyRenderRef = useRef<RenderedIndicator | null>(null);
+  const [tmResult, setTmResult] = useState<TurtleMiuraResult | null>(null);
 
   const indicators = useChartStore((s) => s.indicators);
   const hidden = useChartStore((s) => s.hidden);
@@ -134,10 +168,11 @@ export function PriceChart({ symbol, timeframe }: Props) {
   const [paneOffsets, setPaneOffsets] = useState<PaneOffset[]>([]);
   const [measure, setMeasure] = useState<MeasureState>(INITIAL_MEASURE);
   const [renderTick, setRenderTick] = useState(0);
+  const tmStrategyPaneIdx = 1 + (indicators.rsi ? 1 : 0) + (indicators.macd ? 1 : 0) + (indicators.atr ? 1 : 0);
   const measureRef = useRef(measure);
   measureRef.current = measure;
 
-  // Helper — compute pane top offsets from chart layout
+  // Helper Ã¢â‚¬â€ compute pane top offsets from chart layout
   function recomputePaneOffsets() {
     if (!chartRef.current) return;
     const panes = chartRef.current.panes();
@@ -186,7 +221,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       autoSize: true,
     });
 
-    // PANE 0 — Candles + EMAs
+    // PANE 0 Ã¢â‚¬â€ Candles + EMAs
     candleSeriesRef.current = chart.addSeries(CandlestickSeries, {
       upColor: TV_COLORS.green,
       downColor: TV_COLORS.red,
@@ -216,10 +251,16 @@ export function PriceChart({ symbol, timeframe }: Props) {
       priceLineVisible: false,
       lastValueVisible: false,
     });
+    sma20Ref.current = chart.addSeries(LineSeries, {
+      color: INDICATOR_COLORS.sma20,
+      lineWidth: 1,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
 
     chartRef.current = chart;
 
-    // Click handler — add horizontal price line when hline tool is active
+    // Click handler Ã¢â‚¬â€ add horizontal price line when hline tool is active
     chart.subscribeClick((param) => {
       if (!param.point || !candleSeriesRef.current) return;
       const price = candleSeriesRef.current.coordinateToPrice(param.point.y);
@@ -303,7 +344,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
     const logicalRangeHandler = () => setRenderTick((t) => t + 1);
     chart.timeScale().subscribeVisibleLogicalRangeChange(logicalRangeHandler);
 
-    // ResizeObserver — recompute pane offsets when chart container resizes
+    // ResizeObserver Ã¢â‚¬â€ recompute pane offsets when chart container resizes
     const ro = new ResizeObserver(() => {
       requestAnimationFrame(() => recomputePaneOffsets());
     });
@@ -322,16 +363,23 @@ export function PriceChart({ symbol, timeframe }: Props) {
       ema20Ref.current = null;
       ema50Ref.current = null;
       ema200Ref.current = null;
+      sma20Ref.current = null;
       rsiRef.current = null;
       rsi30Ref.current = null;
       rsi70Ref.current = null;
       macdRef.current = null;
       macdSignalRef.current = null;
       macdHistRef.current = null;
+      barDataRef.current = null;
+      tmTrendRenderRef.current = null;
+      tmBreakoutRenderRef.current = null;
+      tmMomentumRenderRef.current = null;
+      tmVolatilityRenderRef.current = null;
+      tmStrategyRenderRef.current = null;
     };
   }, []);
 
-  // Manage volume — overlay at the bottom of the main pane
+  // Manage volume Ã¢â‚¬â€ overlay at the bottom of the main pane
   useEffect(() => {
     if (!chartRef.current) return;
     if (indicators.volume && !volumeSeriesRef.current) {
@@ -422,7 +470,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
   useEffect(() => {
     if (!chartRef.current) return;
     if (indicators.macd && !macdRef.current) {
-      const paneIndex = indicators.rsi ? 2 : 1;
+      const paneIndex = (indicators.rsi ? 1 : 0) + 1;
       const m = chartRef.current.addSeries(
         LineSeries,
         {
@@ -468,12 +516,56 @@ export function PriceChart({ symbol, timeframe }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [indicators.macd, indicators.rsi]);
 
-  // Visibility — eye toggle (hidden state) + enabled state combined
+  // ATR pane
+  useEffect(() => {
+    if (!chartRef.current) return;
+    if (indicators.atr && !atrRef.current) {
+      const paneIndex = 1 + (indicators.rsi ? 1 : 0) + (indicators.macd ? 1 : 0);
+      const a = chartRef.current.addSeries(
+        LineSeries,
+        {
+          color: INDICATOR_COLORS.atr,
+          lineWidth: 1,
+          priceLineVisible: false,
+          lastValueVisible: false,
+        },
+        paneIndex,
+      );
+      atrRef.current = a;
+      try {
+        chartRef.current.panes()[paneIndex]?.setStretchFactor(1);
+        chartRef.current.panes()[0]?.setStretchFactor(3);
+      } catch {}
+      updateATR();
+    } else if (!indicators.atr && atrRef.current && chartRef.current) {
+      chartRef.current.removeSeries(atrRef.current);
+      atrRef.current = null;
+    }
+    requestAnimationFrame(() => recomputePaneOffsets());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [indicators.atr, indicators.rsi, indicators.macd]);
+
+  // Turtle_Miura strategy indicator toggle
+  useEffect(() => {
+    updateTmIndicators();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [indicators.tmStrategy, indicators.tmTrend, indicators.tmBreakout,
+      indicators.tmMomentum, indicators.tmVolatility]);
+
+  // Recompute TM indicators when config changes
+  useEffect(() => {
+    updateTmIndicators();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.tmSmaPeriod, config.tmRangePeriod, config.tmVolumeMult,
+      config.tmRsiPeriod, config.tmAtrPeriod, config.tmAtrThreshold]);
+
+  // Visibility Ã¢â‚¬â€ eye toggle (hidden state) + enabled state combined
   useEffect(() => {
     const v = (key: IndicatorKey) => indicators[key] && !hidden[key];
     ema20Ref.current?.applyOptions({ visible: v("ema20") });
     ema50Ref.current?.applyOptions({ visible: v("ema50") });
     ema200Ref.current?.applyOptions({ visible: v("ema200") });
+    sma20Ref.current?.applyOptions({ visible: v("sma20") });
     if (rsiRef.current) rsiRef.current.applyOptions({ visible: v("rsi") });
     if (rsi30Ref.current) rsi30Ref.current.applyOptions({ visible: v("rsi") });
     if (rsi70Ref.current) rsi70Ref.current.applyOptions({ visible: v("rsi") });
@@ -481,6 +573,12 @@ export function PriceChart({ symbol, timeframe }: Props) {
     if (macdSignalRef.current) macdSignalRef.current.applyOptions({ visible: v("macd") });
     if (macdHistRef.current) macdHistRef.current.applyOptions({ visible: v("macd") });
     if (volumeSeriesRef.current) volumeSeriesRef.current.applyOptions({ visible: v("volume") });
+    if (atrRef.current) atrRef.current.applyOptions({ visible: v("atr") });
+    if (tmStrategyRenderRef.current) {
+      for (const { series } of tmStrategyRenderRef.current.plotSeries) {
+        series.applyOptions({ visible: v("tmStrategy" as IndicatorKey) });
+      }
+    }
   }, [indicators, hidden]);
 
   // Recompute indicators when config changes (periods)
@@ -489,8 +587,20 @@ export function PriceChart({ symbol, timeframe }: Props) {
   }, [config.ema20, config.ema50, config.ema200]);
 
   useEffect(() => {
+    updateSMA20();
+  }, [config.sma20]);
+
+  useEffect(() => {
     updateRSI();
   }, [config.rsi]);
+
+  useEffect(() => {
+    updateATR();
+  }, [config.atr]);
+
+  useEffect(() => {
+    updateBreakout();
+  }, [config.breakout, indicators.breakout, hidden.breakout]);
 
   useEffect(() => {
     updateMACD();
@@ -536,6 +646,119 @@ export function PriceChart({ symbol, timeframe }: Props) {
     if (tool !== "measure") setMeasure(INITIAL_MEASURE);
   }, [tool]);
 
+  function updateTmIndicators(streaming = false) {
+  try {
+    if (!barDataRef.current) {
+      const bars = candlesRef.current as unknown as Bar[];
+      if (bars.length < 50) return;
+      barDataRef.current = BarData.from(bars);
+    }
+    const bars = barDataRef.current.bars;
+    if (bars.length < 50) return;
+
+    if (!indicators.tmStrategy && !indicators.tmTrend && !indicators.tmBreakout && !indicators.tmMomentum && !indicators.tmVolatility) return;
+
+    // Update Turtle_Miura composite indicator
+    if (indicators.tmStrategy && chartRef.current) {
+      const result = turtleMiuraIndicator(barDataRef.current, {
+        trend: { smaPeriod: config.tmSmaPeriod },
+        breakout: { rangePeriod: config.tmRangePeriod, volumeMult: config.tmVolumeMult },
+        momentum: { rsiPeriod: config.tmRsiPeriod },
+        volatility: { atrPeriod: config.tmAtrPeriod, thresholdMult: config.tmAtrThreshold },
+      });
+      if (result) {
+        setTmResult(result);
+        if (!tmStrategyRenderRef.current) {
+          tmStrategyRenderRef.current = renderIndicatorResult(
+            chartRef.current,
+            result,
+            tmStrategyPaneIdx,
+          );
+          try {
+            chartRef.current.panes()[tmStrategyPaneIdx]?.setStretchFactor(1);
+            chartRef.current.panes()[0]?.setStretchFactor(3);
+          } catch {}
+        } else if (streaming) {
+          updateLastRenderedBar(tmStrategyRenderRef.current, result);
+        } else {
+          updateRenderedSeries(tmStrategyRenderRef.current, result);
+        }
+      }
+    } else if (!indicators.tmStrategy && tmStrategyRenderRef.current && chartRef.current) {
+      removeRenderedIndicator(chartRef.current, tmStrategyRenderRef.current);
+      tmStrategyRenderRef.current = null;
+      setTmResult(null);
+      requestAnimationFrame(() => recomputePaneOffsets());
+    }
+
+    // Individual component indicators (overlay on main pane)
+    // Trend overlay
+    if (indicators.tmTrend && chartRef.current && !tmTrendRenderRef.current) {
+      const result = trendIndicator(barDataRef.current, { smaPeriod: config.tmSmaPeriod });
+      if (result) {
+        tmTrendRenderRef.current = renderIndicatorResult(chartRef.current, result, 0);
+      }
+    } else if (!indicators.tmTrend && tmTrendRenderRef.current && chartRef.current) {
+      removeRenderedIndicator(chartRef.current, tmTrendRenderRef.current);
+      tmTrendRenderRef.current = null;
+    } else if (indicators.tmTrend && tmTrendRenderRef.current && chartRef.current && streaming) {
+      const result = trendIndicator(barDataRef.current, { smaPeriod: config.tmSmaPeriod });
+      if (result) updateLastRenderedBar(tmTrendRenderRef.current, result);
+    }
+
+    // Breakout overlay
+    if (indicators.tmBreakout && chartRef.current && !tmBreakoutRenderRef.current) {
+      const result = breakoutIndicator(barDataRef.current, { rangePeriod: config.tmRangePeriod, volumeMult: config.tmVolumeMult });
+      if (result) {
+        tmBreakoutRenderRef.current = renderIndicatorResult(chartRef.current, result, 0);
+      }
+    } else if (!indicators.tmBreakout && tmBreakoutRenderRef.current && chartRef.current) {
+      removeRenderedIndicator(chartRef.current, tmBreakoutRenderRef.current);
+      tmBreakoutRenderRef.current = null;
+    } else if (indicators.tmBreakout && tmBreakoutRenderRef.current && chartRef.current && streaming) {
+      const result = breakoutIndicator(barDataRef.current, { rangePeriod: config.tmRangePeriod, volumeMult: config.tmVolumeMult });
+      if (result) updateLastRenderedBar(tmBreakoutRenderRef.current, result);
+    }
+
+    // Momentum (separate pane)
+    if (indicators.tmMomentum && chartRef.current && !tmMomentumRenderRef.current) {
+      const result = momentumIndicator(barDataRef.current, { rsiPeriod: config.tmRsiPeriod });
+      if (result) {
+        const paneIdx = indicators.tmStrategy ? tmStrategyPaneIdx + 1 : tmStrategyPaneIdx;
+        tmMomentumRenderRef.current = renderIndicatorResult(chartRef.current, result, paneIdx);
+      }
+    } else if (!indicators.tmMomentum && tmMomentumRenderRef.current && chartRef.current) {
+      removeRenderedIndicator(chartRef.current, tmMomentumRenderRef.current);
+      tmMomentumRenderRef.current = null;
+    } else if (indicators.tmMomentum && tmMomentumRenderRef.current && chartRef.current && streaming) {
+      const result = momentumIndicator(barDataRef.current, { rsiPeriod: config.tmRsiPeriod });
+      if (result) updateLastRenderedBar(tmMomentumRenderRef.current, result);
+    }
+
+    // Volatility (separate pane)
+    if (indicators.tmVolatility && chartRef.current && !tmVolatilityRenderRef.current) {
+      const result = volatilityIndicator(barDataRef.current, { atrPeriod: config.tmAtrPeriod, thresholdMult: config.tmAtrThreshold });
+      if (result) {
+        const paneIdx = indicators.tmStrategy ? tmStrategyPaneIdx + 1 : tmStrategyPaneIdx;
+        tmVolatilityRenderRef.current = renderIndicatorResult(chartRef.current, result, paneIdx);
+      }
+    } else if (!indicators.tmVolatility && tmVolatilityRenderRef.current && chartRef.current) {
+      removeRenderedIndicator(chartRef.current, tmVolatilityRenderRef.current);
+      tmVolatilityRenderRef.current = null;
+    } else if (indicators.tmVolatility && tmVolatilityRenderRef.current && chartRef.current && streaming) {
+      const result = volatilityIndicator(barDataRef.current, { atrPeriod: config.tmAtrPeriod, thresholdMult: config.tmAtrThreshold });
+      if (result) updateLastRenderedBar(tmVolatilityRenderRef.current, result);
+    }
+
+    // Only recompute panes if we rendered or removed something
+    if (tmStrategyRenderRef.current || tmTrendRenderRef.current || tmBreakoutRenderRef.current || tmMomentumRenderRef.current || tmVolatilityRenderRef.current) {
+      requestAnimationFrame(() => recomputePaneOffsets());
+    }
+  } catch (err) {
+    console.error("[TM] updateTmIndicators error:", err);
+  }
+}
+
   function updateEMAs() {
     const c = candlesRef.current;
     if (c.length === 0) return;
@@ -573,6 +796,66 @@ export function PriceChart({ symbol, timeframe }: Props) {
       ema200: last200,
       volume: lastVol,
     }));
+  }
+
+  function updateSMA20() {
+    const c = candlesRef.current;
+    if (c.length === 0 || !sma20Ref.current) return;
+    const cfg = configRef.current;
+    const data = sma(c, cfg.sma20).map((p) => ({
+      time: p.time as UTCTimestamp,
+      value: p.value,
+    }));
+    sma20Ref.current.setData(data);
+    setLastValues((prev) => ({ ...prev, sma20: data.at(-1)?.value }));
+  }
+
+  function updateATR() {
+    const c = candlesRef.current;
+    if (c.length === 0 || !atrRef.current) return;
+    const cfg = configRef.current;
+    const data = atr(c, cfg.atr).map((p) => ({
+      time: p.time as UTCTimestamp,
+      value: p.value,
+    }));
+    atrRef.current.setData(data);
+    setLastValues((prev) => ({ ...prev, atr: data.at(-1)?.value }));
+  }
+
+  function updateBreakout() {
+    const c = candlesRef.current;
+    if (c.length === 0 || !candleSeriesRef.current) return;
+    const cfg = configRef.current;
+    const levels = breakoutLevels(c, cfg.breakout);
+
+    // Remove existing price lines
+    if (breakoutHighRef.current) {
+      try { candleSeriesRef.current.removePriceLine(breakoutHighRef.current); } catch {}
+      breakoutHighRef.current = null;
+    }
+    if (breakoutLowRef.current) {
+      try { candleSeriesRef.current.removePriceLine(breakoutLowRef.current); } catch {}
+      breakoutLowRef.current = null;
+    }
+
+    if (!levels || !indicators.breakout || hidden.breakout) return;
+
+    breakoutHighRef.current = candleSeriesRef.current.createPriceLine({
+      price: levels.high,
+      color: INDICATOR_COLORS.breakout,
+      lineWidth: 1,
+      lineStyle: LineStyle.Dashed,
+      axisLabelVisible: true,
+      title: "Breakout High",
+    });
+    breakoutLowRef.current = candleSeriesRef.current.createPriceLine({
+      price: levels.low,
+      color: INDICATOR_COLORS.breakout,
+      lineWidth: 1,
+      lineStyle: LineStyle.Dashed,
+      axisLabelVisible: true,
+      title: "Breakout Low",
+    });
   }
 
   function updateRSI() {
@@ -634,6 +917,8 @@ export function PriceChart({ symbol, timeframe }: Props) {
         const klines = await fetchKlines(symbol, timeframe, 1000);
         if (cancelled) return;
         candlesRef.current = klines;
+        barDataRef.current = BarData.from(klines as unknown as Bar[]);
+        setCandlesState(klines);
         if (candleSeriesRef.current) {
           candleSeriesRef.current.setData(
             klines.map((k) => ({
@@ -655,8 +940,12 @@ export function PriceChart({ symbol, timeframe }: Props) {
           );
         }
         updateEMAs();
+        updateSMA20();
         updateRSI();
         updateMACD();
+        updateATR();
+        updateBreakout();
+        updateTmIndicators();
         chartRef.current?.timeScale().fitContent();
         requestAnimationFrame(() => recomputePaneOffsets());
 
@@ -700,8 +989,19 @@ export function PriceChart({ symbol, timeframe }: Props) {
               });
             }
             updateEMAs();
+            updateSMA20();
             updateRSI();
             updateMACD();
+            updateATR();
+            updateBreakout();
+            if (barDataRef.current) {
+              if (k.isFinal) {
+                barDataRef.current.push(k as unknown as Bar);
+              } else {
+                barDataRef.current.updateLast(k as unknown as Bar);
+              }
+            }
+            updateTmIndicators(true);
             const prev = arr[arr.length - 2] ?? lastCandle;
             setLastPrice({
               value: k.close,
@@ -718,6 +1018,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
 
     return () => {
       cancelled = true;
+      barDataRef.current = null;
       if (unsub) unsub();
     };
   }, [symbol, timeframe]);
@@ -733,6 +1034,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
   // Determine which pane each indicator lives in (based on current layout)
   const rsiPaneIdx = 1;
   const macdPaneIdx = indicators.rsi ? 2 : 1;
+  const atrPaneIdx = 1 + (indicators.rsi ? 1 : 0) + (indicators.macd ? 1 : 0);
 
   let measureRender: React.ReactNode = null;
   if (
@@ -794,9 +1096,9 @@ export function PriceChart({ symbol, timeframe }: Props) {
         <div className="flex h-5 flex-nowrap items-center gap-x-3 overflow-hidden whitespace-nowrap">
           <div className="flex shrink-0 items-center gap-2 text-[13px] font-semibold">
             <span className="text-tv-text">{symbol}</span>
-            <span className="text-tv-text-muted">·</span>
+            <span className="text-tv-text-muted">Ã‚Â·</span>
             <span className="uppercase text-tv-text-muted">{timeframe}</span>
-            <span className="text-tv-text-muted">·</span>
+            <span className="text-tv-text-muted">Ã‚Â·</span>
             <span className="text-tv-text-muted">Binance</span>
           </div>
           {hover && (
@@ -824,7 +1126,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
           )}
         </div>
 
-        {/* Row 2: big live price (always present — reserves space even while loading) */}
+        {/* Row 2: big live price (always present Ã¢â‚¬â€ reserves space even while loading) */}
         <div className="flex h-7 items-center gap-2">
           {lastPrice ? (
             <>
@@ -837,7 +1139,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
               </span>
             </>
           ) : (
-            <span className="text-xs text-tv-text-muted">Cargando…</span>
+            <span className="text-xs text-tv-text-muted">CargandoÃ¢â‚¬Â¦</span>
           )}
         </div>
 
@@ -876,6 +1178,17 @@ export function PriceChart({ symbol, timeframe }: Props) {
               onRemove={() => removeIndicator("ema200")}
             />
           )}
+          {indicators.sma20 && (
+            <IndicatorPill
+              name={`SMA ${config.sma20}`}
+              value={lastValues.sma20 !== undefined ? formatPrice(lastValues.sma20) : undefined}
+              color={INDICATOR_COLORS.sma20}
+              hidden={hidden.sma20}
+              onToggleHide={() => toggleHidden("sma20")}
+              onSettings={() => setSettingsTarget("sma20")}
+              onRemove={() => removeIndicator("sma20")}
+            />
+          )}
           {indicators.volume && (
             <IndicatorPill
               name="Vol"
@@ -885,6 +1198,42 @@ export function PriceChart({ symbol, timeframe }: Props) {
               onToggleHide={() => toggleHidden("volume")}
               onSettings={() => setSettingsTarget("volume")}
               onRemove={() => removeIndicator("volume")}
+            />
+          )}
+          {indicators.breakout && (
+            <IndicatorPill
+              name={`Breakout ${config.breakout}`}
+              value={undefined}
+              color={INDICATOR_COLORS.breakout}
+              hidden={hidden.breakout}
+              onToggleHide={() => toggleHidden("breakout")}
+              onSettings={() => setSettingsTarget("breakout")}
+              onRemove={() => removeIndicator("breakout")}
+            />
+          )}
+          {indicators.tmStrategy && tmResult && (
+            <StrategyScoreBadge score={tmResult.score} state={tmResult.state} />
+          )}
+          {indicators.tmTrend && (
+            <IndicatorPill
+              name="TM Trend"
+              value={undefined}
+              color={INDICATOR_COLORS.tmTrend}
+              hidden={hidden.tmTrend}
+              onToggleHide={() => toggleHidden("tmTrend")}
+              onSettings={() => setSettingsTarget("tmTrend")}
+              onRemove={() => removeIndicator("tmTrend")}
+            />
+          )}
+          {indicators.tmBreakout && (
+            <IndicatorPill
+              name="TM Breakout"
+              value={undefined}
+              color={INDICATOR_COLORS.tmBreakout}
+              hidden={hidden.tmBreakout}
+              onToggleHide={() => toggleHidden("tmBreakout")}
+              onSettings={() => setSettingsTarget("tmBreakout")}
+              onRemove={() => removeIndicator("tmBreakout")}
             />
           )}
         </div>
@@ -929,6 +1278,36 @@ export function PriceChart({ symbol, timeframe }: Props) {
           />
         </div>
       )}
+
+      {/* ATR pane label */}
+      {indicators.atr && paneOffsets[atrPaneIdx] && (
+        <div
+          style={{ top: paneOffsets[atrPaneIdx].top + 6, left: 12 }}
+          className="pointer-events-none absolute z-10"
+        >
+          <IndicatorPill
+            name={`ATR ${config.atr}`}
+            value={lastValues.atr !== undefined ? lastValues.atr.toFixed(2) : undefined}
+            color={INDICATOR_COLORS.atr}
+            hidden={hidden.atr}
+            onToggleHide={() => toggleHidden("atr")}
+            onSettings={() => setSettingsTarget("atr")}
+            onRemove={() => removeIndicator("atr")}
+          />
+        </div>
+      )}
+
+      {/* Turtle_Miura strategy score panel */}
+      {tmResult && indicators.tmStrategy && (
+          <div className="fixed bottom-4 right-4 z-50">
+            <StrategyScorePanel
+              score={tmResult.score}
+              state={tmResult.state}
+              components={tmResult.components}
+              details={tmResult.details}
+            />
+          </div>
+        )}
     </div>
   );
 }

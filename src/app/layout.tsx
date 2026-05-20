@@ -16,9 +16,9 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TradingView Gratis — Crypto charts open source",
+  title: "MiuraTrade — Crypto Trading OS",
   description:
-    "Plataforma de charts crypto en vivo. Alternativa gratis a TradingView. Powered by Binance + lightweight-charts.",
+    "Crypto trading workspace. Market scanner, signal engine, and chart analysis powered by Binance + lightweight-charts.",
 };
 
 export default function RootLayout({

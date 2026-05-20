@@ -18,10 +18,19 @@ interface Entry {
     ema20: number;
     ema50: number;
     ema200: number;
+    sma20: number;
     rsi: number;
     macdFast: number;
     macdSlow: number;
     macdSignal: number;
+    atr: number;
+    breakout: number;
+    tmSmaPeriod: number;
+    tmRangePeriod: number;
+    tmVolumeMult: number;
+    tmRsiPeriod: number;
+    tmAtrPeriod: number;
+    tmAtrThreshold: number;
   }) => string;
   group: string;
 }
@@ -30,6 +39,7 @@ const ENTRIES: Entry[] = [
   { key: "ema20", group: "Medias móviles", label: (c) => `EMA ${c.ema20}` },
   { key: "ema50", group: "Medias móviles", label: (c) => `EMA ${c.ema50}` },
   { key: "ema200", group: "Medias móviles", label: (c) => `EMA ${c.ema200}` },
+  { key: "sma20", group: "Medias móviles", label: (c) => `SMA ${c.sma20}` },
   { key: "volume", group: "Volumen", label: () => "Volumen" },
   { key: "rsi", group: "Osciladores", label: (c) => `RSI (${c.rsi})` },
   {
@@ -37,6 +47,13 @@ const ENTRIES: Entry[] = [
     group: "Osciladores",
     label: (c) => `MACD (${c.macdFast}, ${c.macdSlow}, ${c.macdSignal})`,
   },
+  { key: "atr", group: "Volatilidad", label: (c) => `ATR (${c.atr})` },
+  { key: "breakout", group: "Niveles", label: (c) => `Breakout (${c.breakout})` },
+  { key: "tmStrategy", group: "Turtle_Miura", label: () => "Strategy Score" },
+  { key: "tmTrend", group: "Turtle_Miura", label: (c) => `Trend (SMA ${c.tmSmaPeriod})` },
+  { key: "tmBreakout", group: "Turtle_Miura", label: (c) => `Breakout (${c.tmRangePeriod}, ${c.tmVolumeMult}x)` },
+  { key: "tmMomentum", group: "Turtle_Miura", label: (c) => `Momentum (RSI ${c.tmRsiPeriod})` },
+  { key: "tmVolatility", group: "Turtle_Miura", label: (c) => `Volatility (ATR ${c.tmAtrPeriod})` },
 ];
 
 export function IndicatorMenu() {

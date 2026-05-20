@@ -1,4 +1,4 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files
 
 # dependencies
 /node_modules
@@ -49,3 +49,30 @@ id_rsa*
 credentials.json
 .aws/
 .ssh/
+
+# Local Pi runtime state
+.atl/
+
+# ─── MiuraTrade fork exclusions ───────────────────────────
+
+# Legacy files (debug scripts, backups, screenshots, tooling caches, private strategy)
+legacy/
+
+# Debug / patch scripts
+check-encoding*.ps1
+debug-chart.ps1
+fix-chart.ps1
+scripts/
+
+# Tooling caches
+.playwright-mcp/
+.pi/
+.pi-lens/
+*.orig
+*.bak
+
+# Screenshots
+tm-strategy-panel*.png
+
+# Qwen Code project settings (per-developer)
+.qwen/

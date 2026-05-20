@@ -1,117 +1,157 @@
+import {
+	SMA as LibSMA,
+	EMA as LibEMA,
+	RSI as LibRSI,
+	MACD as LibMACD,
+	ATR as LibATR,
+} from "lightweight-charts-indicators";
+import type { Bar } from "oakscriptjs";
 import type { Candle } from "@/lib/binance/types";
 
 export interface IndicatorPoint {
-  time: number;
-  value: number;
+	time: number;
+	value: number;
 }
 
 export interface MACDPoint {
-  time: number;
-  macd: number;
-  signal: number;
-  histogram: number;
+	time: number;
+	macd: number;
+	signal: number;
+	histogram: number;
 }
 
 /**
- * Simple Moving Average
+ * Convert our Candle[] to Bar[] for lightweight-charts-indicators.
+ * The shapes are identical (time, open, high, low, close, volume),
+ * but we cast explicitly for type safety.
+ */
+function toBars(candles: Candle[]): Bar[] {
+	return candles as unknown as Bar[];
+}
+
+/**
+ * Filter NaN values from library plot output.
+ * lightweight-charts-indicators outputs NaN for points before
+ * the indicator has enough data; lightweight-charts setData
+ * does not accept NaN.
+ */
+function filterNaN(
+	points: { time: number; value: number }[],
+): IndicatorPoint[] {
+	return points.filter((p) => !isNaN(p.value)) as IndicatorPoint[];
+}
+
+/**
+ * Simple Moving Average — powered by lightweight-charts-indicators.
  */
 export function sma(candles: Candle[], period: number): IndicatorPoint[] {
-  const out: IndicatorPoint[] = [];
-  if (candles.length < period) return out;
-  let sum = 0;
-  for (let i = 0; i < candles.length; i++) {
-    sum += candles[i].close;
-    if (i >= period) sum -= candles[i - period].close;
-    if (i >= period - 1) out.push({ time: candles[i].time, value: sum / period });
-  }
-  return out;
+	if (period <= 0 || candles.length < period) return [];
+	const result = LibSMA.calculate(toBars(candles), {
+		len: period,
+		src: "close",
+	});
+	return filterNaN(result.plots.plot0);
 }
 
 /**
- * Exponential Moving Average — seeded with SMA of first `period` candles.
+ * Exponential Moving Average — powered by lightweight-charts-indicators.
  */
 export function ema(candles: Candle[], period: number): IndicatorPoint[] {
-  const out: IndicatorPoint[] = [];
-  if (candles.length < period) return out;
-  const k = 2 / (period + 1);
-  let prev = 0;
-  for (let i = 0; i < period; i++) prev += candles[i].close;
-  prev /= period;
-  out.push({ time: candles[period - 1].time, value: prev });
-  for (let i = period; i < candles.length; i++) {
-    prev = candles[i].close * k + prev * (1 - k);
-    out.push({ time: candles[i].time, value: prev });
-  }
-  return out;
+	if (candles.length < period) return [];
+	const result = LibEMA.calculate(toBars(candles), {
+		length: period,
+		src: "close",
+	});
+	return filterNaN(result.plots.plot0);
 }
 
 /**
- * RSI (Wilder) — period typically 14.
+ * Relative Strength Index — powered by lightweight-charts-indicators.
+ * Wilder smoothing matches TradingView's built-in RSI.
  */
 export function rsi(candles: Candle[], period = 14): IndicatorPoint[] {
-  const out: IndicatorPoint[] = [];
-  if (candles.length <= period) return out;
-  let gain = 0;
-  let loss = 0;
-  for (let i = 1; i <= period; i++) {
-    const diff = candles[i].close - candles[i - 1].close;
-    if (diff >= 0) gain += diff;
-    else loss -= diff;
-  }
-  gain /= period;
-  loss /= period;
-  let rs = loss === 0 ? 100 : gain / loss;
-  out.push({ time: candles[period].time, value: 100 - 100 / (1 + rs) });
-  for (let i = period + 1; i < candles.length; i++) {
-    const diff = candles[i].close - candles[i - 1].close;
-    const g = diff > 0 ? diff : 0;
-    const l = diff < 0 ? -diff : 0;
-    gain = (gain * (period - 1) + g) / period;
-    loss = (loss * (period - 1) + l) / period;
-    rs = loss === 0 ? 100 : gain / loss;
-    out.push({ time: candles[i].time, value: 100 - 100 / (1 + rs) });
-  }
-  return out;
+	if (candles.length <= period) return [];
+	const result = LibRSI.calculate(toBars(candles), {
+		length: period,
+		src: "close",
+	});
+	return filterNaN(result.plots.plot0);
 }
 
 /**
- * MACD — fast EMA, slow EMA, signal EMA of the MACD line.
- * Defaults: 12 / 26 / 9.
+ * Average True Range — powered by lightweight-charts-indicators.
+ * Measures market volatility. Default smoothing: RMA (Wilder).
+ * ATR is used in Sprint 4 for Turtle_Miura volatility filter.
+ */
+export function atr(candles: Candle[], period = 14): IndicatorPoint[] {
+	if (period <= 0 || candles.length < period) return [];
+	const result = LibATR.calculate(toBars(candles), {
+		length: period,
+		smoothing: "RMA",
+	});
+	return filterNaN(result.plots.plot0);
+}
+
+/**
+ * MACD — powered by lightweight-charts-indicators.
+ * fastLength/slowLength/signalLength default: 12/26/9.
  */
 export function macd(
-  candles: Candle[],
-  fast = 12,
-  slow = 26,
-  signal = 9,
+	candles: Candle[],
+	fast = 12,
+	slow = 26,
+	signal = 9,
 ): MACDPoint[] {
-  if (candles.length < slow + signal) return [];
-  const emaFast = ema(candles, fast);
-  const emaSlow = ema(candles, slow);
-  // align: emaSlow starts later
-  const slowStartTime = emaSlow[0].time;
-  const fastByTime = new Map(emaFast.map((p) => [p.time, p.value]));
-  const macdLine: IndicatorPoint[] = [];
-  for (const p of emaSlow) {
-    const f = fastByTime.get(p.time);
-    if (f !== undefined) macdLine.push({ time: p.time, value: f - p.value });
-  }
-  // signal = EMA of MACD line. Build synthetic candles for ema()
-  const synth: Candle[] = macdLine.map((p) => ({
-    time: p.time,
-    open: p.value,
-    high: p.value,
-    low: p.value,
-    close: p.value,
-    volume: 0,
-  }));
-  const sig = ema(synth, signal);
-  const sigByTime = new Map(sig.map((p) => [p.time, p.value]));
-  const out: MACDPoint[] = [];
-  for (const p of macdLine) {
-    const s = sigByTime.get(p.time);
-    if (s === undefined) continue;
-    out.push({ time: p.time, macd: p.value, signal: s, histogram: p.value - s });
-  }
-  void slowStartTime;
-  return out;
+	if (candles.length < slow + signal) return [];
+	const result = LibMACD.calculate(toBars(candles), {
+		fastLength: fast,
+		slowLength: slow,
+		signalLength: signal,
+		src: "close",
+	});
+
+	const macdPoints = result.plots.plot0.filter((p) => !isNaN(p.value));
+	const signalPoints = result.plots.plot1.filter((p) => !isNaN(p.value));
+
+	const signalByTime = new Map(signalPoints.map((p) => [p.time, p.value]));
+
+	return macdPoints
+		.map((p) => {
+			const s = signalByTime.get(p.time);
+			if (s === undefined) return null;
+			return { time: p.time, macd: p.value, signal: s, histogram: p.value - s };
+		})
+		.filter(Boolean) as MACDPoint[];
+}
+
+/**
+ * Breakout Levels — detects high and low levels of a price consolidation range.
+ * Returns the highest high and lowest low of the last `lookback` candles.
+ */
+export function breakoutLevels(
+	candles: Candle[],
+ lookback = 20
+): { high: number; low: number; highTime: number; lowTime: number } | null {
+	if (candles.length < lookback) return null;
+
+	const relevantCandles = candles.slice(-lookback);
+	if (relevantCandles.length === 0) return null;
+
+	let high = -Infinity;
+	let low = Infinity;
+	let highTime = 0;
+	let lowTime = 0;
+
+	for (const candle of relevantCandles) {
+		if (candle.high > high) {
+			high = candle.high;
+			highTime = candle.time;
+		}
+		if (candle.low < low) {
+			low = candle.low;
+			lowTime = candle.time;
+		}
+	}
+
+	return { high, low, highTime, lowTime };
 }
