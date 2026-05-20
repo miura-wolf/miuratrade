@@ -59,6 +59,7 @@ credentials.json
 legacy/
 
 # MiuraTurtle strategy — private, not for public repo
+miura-strategy/
 docs/strategy-turtle-miura.md
 docs/sprint5-lib-evaluation.md
 src/lib/oakscript/indicators/__tests__/
