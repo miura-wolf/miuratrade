@@ -55,8 +55,14 @@ credentials.json
 
 # ─── MiuraTrade fork exclusions ───────────────────────────
 
-# Legacy files (debug scripts, backups, screenshots, tooling caches, private strategy)
+# Legacy files (debug scripts, backups, screenshots, private strategy)
 legacy/
+
+# MiuraTurtle strategy — private, not for public repo
+docs/strategy-turtle-miura.md
+docs/sprint5-lib-evaluation.md
+src/lib/oakscript/indicators/__tests__/
+src/lib/signal/__tests__/
 
 # Debug / patch scripts
 check-encoding*.ps1
