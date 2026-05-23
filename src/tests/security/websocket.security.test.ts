@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { getBinanceWS } from "../../lib/binance/ws";
+import { BinanceWS } from "../../lib/binance/ws";
 
 // Mock WebSocket globally
 class MockWebSocket {
@@ -50,11 +50,16 @@ class MockWebSocket {
 globalThis.WebSocket = MockWebSocket as any;
 
 describe("BinanceWS Security Tests", () => {
-  let ws = getBinanceWS();
+  let ws: BinanceWS;
+
   beforeEach(() => {
-    // reset singleton state
-    ws.close();
-    ws = getBinanceWS();
+    MockWebSocket.instances.length = 0;
+    // Create a fresh instance each time (non-singleton)
+    ws = new BinanceWS();
+    // Reset closing flag so connect() works after any previous close()
+    // @ts-expect-error — resetting private state for test isolation
+    ws.closing = false;
+    ws.connect();
     vi.restoreAllMocks();
   });
 
@@ -65,12 +70,12 @@ describe("BinanceWS Security Tests", () => {
     unsubscribe();
   });
 
-  it("should accept valid subscription and receive candle", (done) => {
+  it("should accept valid subscription and receive candle", async () => {
     const onCandle = vi.fn();
     ws.subscribeKline("BTCUSDT", "1m", onCandle);
-    setTimeout(() => {
+    // Wait for mock WS to open, send SUBSCRIBE, and echo back kline message
+    await vi.waitFor(() => {
       expect(onCandle).toHaveBeenCalled();
-      done();
-    }, 10);
+    }, { timeout: 2000, interval: 50 });
   });
 });
