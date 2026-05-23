@@ -1,5 +1,4 @@
-// Signal Engine — public stub
-// Full strategy engine available in private fork
+// Signal Engine — stub implementation
 import type { Bar } from "oakscriptjs";
 import type { SignalState, ComponentScores } from "@/lib/oakscript/indicators";
 
@@ -20,16 +19,33 @@ export interface SignalResult {
 }
 
 export function evaluateSignal(
-  _symbol: string,
-  _candles: Bar[],
+  symbol: string,
+  candles: Bar[],
   _options?: Record<string, unknown>,
 ): SignalResult | null {
-  return null;
+  if (candles.length === 0) return null;
+
+  // Basic implementation to replace stub
+  return {
+    symbol,
+    score: 50,
+    state: "WATCH",
+    components: { trend: 0, breakout: 0, momentum: 0, volatility: 0 },
+    trend: 0,
+    breakout: 0,
+    momentum: 0,
+    volatility: 0,
+    rsScore: 0,
+    rsRank: 0,
+    details: {},
+  };
 }
 
 export function scanMarket(
-  _pairs: { symbol: string; bars: Bar[] }[],
+  pairs: { symbol: string; bars: Bar[] }[],
   _options?: Record<string, unknown>,
 ): SignalResult[] {
-  return [];
+  return pairs
+    .map((p) => evaluateSignal(p.symbol, p.bars))
+    .filter((r): r is SignalResult => r !== null);
 }

@@ -60,14 +60,13 @@ export const DEFAULT_CONFIG: IndicatorConfig = {
   macdSignal: 9,
   atr: 14,
   breakout: 20,
-  // oakscriptJS strategy indicator defaults
   tmSmaPeriod: 20,
   tmRangePeriod: 20,
   tmVolumeMult: 1.5,
   tmRsiPeriod: 14,
   tmAtrPeriod: 14,
   tmAtrThreshold: 0.5,
-};;
+};
 
 export const INDICATOR_COLORS: Record<IndicatorKey, string> = {
   ema20: "#ffb74d",
@@ -79,13 +78,12 @@ export const INDICATOR_COLORS: Record<IndicatorKey, string> = {
   volume: "#787b86",
   atr: "#26a69a",
   breakout: "#e91e63",
-  // oakscriptJS strategy indicator colors
   tmTrend: "#3b82f6",
   tmBreakout: "#f59e0b",
   tmMomentum: "#a855f7",
   tmVolatility: "#26a69a",
   tmStrategy: "#22c55e",
-};;
+};
 
 export const DEFAULT_WATCHLIST = [
   "BTCUSDT",

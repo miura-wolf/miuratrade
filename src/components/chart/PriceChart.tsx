@@ -14,7 +14,8 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { fetchKlines } from "@/lib/binance/rest";
-import { getBinanceWS } from "@/lib/binance/ws";
+import { useChartWS } from "@/hooks/useChartWS";
+import { useChartData } from "@/hooks/useChartData";
 import { ema, sma, rsi, macd, atr, breakoutLevels } from "@/lib/indicators";
 import type { Candle, Timeframe } from "@/lib/binance/types";
 import {
@@ -23,7 +24,8 @@ import {
   type IndicatorKey,
 } from "@/lib/store/chart-store";
 import { formatPrice, formatVolume } from "@/lib/format";
-import { IndicatorPill } from "./IndicatorPill";
+import { ChartHeader } from "./ChartHeader";
+import { IndicatorPills } from "./IndicatorPills";
 import { MeasureOverlay } from "./MeasureOverlay";
 import { BarData, type Bar } from "oakscriptjs";
 import {
@@ -162,7 +164,6 @@ export function PriceChart({ symbol, timeframe }: Props) {
   const configRef = useRef(config);
   configRef.current = config;
 
-  const [hover, setHover] = useState<HoverInfo | null>(null);
   const [lastPrice, setLastPrice] = useState<{ value: number; pct: number } | null>(null);
   const [lastValues, setLastValues] = useState<LastValues>({});
   const [paneOffsets, setPaneOffsets] = useState<PaneOffset[]>([]);
@@ -171,6 +172,15 @@ export function PriceChart({ symbol, timeframe }: Props) {
   const tmStrategyPaneIdx = 1 + (indicators.rsi ? 1 : 0) + (indicators.macd ? 1 : 0) + (indicators.atr ? 1 : 0);
   const measureRef = useRef(measure);
   measureRef.current = measure;
+
+  const { candles, loading, candlesRef } = useChartData(symbol, timeframe);
+
+  useChartWS(symbol, timeframe, (c) => {
+    candlesRef.current = [...candlesRef.current, c];
+    if (candleSeriesRef.current) candleSeriesRef.current.update(c);
+  }, (tick) => {
+    setLastPrice({ value: tick.close, pct: tick.pct });
+  });
 
   // Helper Ã¢â‚¬â€ compute pane top offsets from chart layout
   function recomputePaneOffsets() {
@@ -1096,9 +1106,9 @@ export function PriceChart({ symbol, timeframe }: Props) {
         <div className="flex h-5 flex-nowrap items-center gap-x-3 overflow-hidden whitespace-nowrap">
           <div className="flex shrink-0 items-center gap-2 text-[13px] font-semibold">
             <span className="text-tv-text">{symbol}</span>
-            <span className="text-tv-text-muted">Ã‚Â·</span>
+            <span className="text-tv-text-muted">·</span>
             <span className="uppercase text-tv-text-muted">{timeframe}</span>
-            <span className="text-tv-text-muted">Ã‚Â·</span>
+            <span className="text-tv-text-muted">·</span>
             <span className="text-tv-text-muted">Binance</span>
           </div>
           {hover && (
@@ -1139,7 +1149,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
               </span>
             </>
           ) : (
-            <span className="text-xs text-tv-text-muted">CargandoÃ¢â‚¬Â¦</span>
+            <span className="text-xs text-tv-text-muted">Cargando…</span>
           )}
         </div>
 
