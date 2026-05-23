@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
   createChart,
   CandlestickSeries,
@@ -12,11 +12,12 @@ import {
   type ISeriesApi,
   type IPriceLine,
   type UTCTimestamp,
+  type Time,
 } from "lightweight-charts";
 import { fetchKlines } from "@/lib/binance/rest";
 import { useChartWS } from "@/hooks/useChartWS";
 import { useChartData } from "@/hooks/useChartData";
-import { ema, sma, rsi, macd, atr, breakoutLevels } from "@/lib/indicators";
+import { ema, sma, rsi, macd, atr, breakoutLevels, preloadIndicators } from "@/lib/indicators";
 import type { Candle, Timeframe } from "@/lib/binance/types";
 import {
   INDICATOR_COLORS,
@@ -25,9 +26,9 @@ import {
 } from "@/lib/store/chart-store";
 import { formatPrice, formatVolume } from "@/lib/format";
 import { ChartHeader } from "./ChartHeader";
-import { IndicatorPills } from "./IndicatorPills";
+import { IndicatorPill } from "./IndicatorPill";
 import { MeasureOverlay } from "./MeasureOverlay";
-import { BarData, type Bar } from "oakscriptjs";
+import type { Bar } from "oakscriptjs";
 import {
   trendIndicator,
   breakoutIndicator,
@@ -45,6 +46,29 @@ import {
 } from "@/lib/oakscript/renderer";
 import { StrategyScorePanel } from "./StrategyScorePanel";
 import { StrategyScoreBadge } from "./StrategyScoreBadge";
+import { getBinanceWS } from "@/lib/binance/ws";
+
+// ── oakscriptjs BarData lazy-loader ──
+// BarData is the heaviest export from oakscriptjs (~50KB).
+// We preload it on mount and cache the class reference so
+// the main bundle doesn't include oakscriptjs upfront.
+let _BarDataClass: typeof import("oakscriptjs").BarData | null = null;
+let _BarDataPromise: Promise<typeof import("oakscriptjs").BarData> | null = null;
+
+function preloadBarData() {
+  if (!_BarDataPromise) {
+    _BarDataPromise = import("oakscriptjs").then((m) => {
+      _BarDataClass = m.BarData;
+      return m.BarData;
+    });
+  }
+  return _BarDataPromise;
+}
+
+async function getBarData() {
+  if (_BarDataClass) return _BarDataClass;
+  return preloadBarData();
+}
 
 interface MeasurePoint {
   time: number;
@@ -133,10 +157,9 @@ export function PriceChart({ symbol, timeframe }: Props) {
   const atrRef = useRef<ISeriesApi<"Line"> | null>(null);
   const breakoutHighRef = useRef<IPriceLine | null>(null);
   const breakoutLowRef = useRef<IPriceLine | null>(null);
-  const candlesRef = useRef<Candle[]>([]);
   const priceLinesMapRef = useRef<Map<string, IPriceLine>>(new Map());
   // oakscriptJS strategy indicator refs
-  const barDataRef = useRef<BarData | null>(null);
+  const barDataRef = useRef<import("oakscriptjs").BarData | null>(null);
   const tmTrendRenderRef = useRef<RenderedIndicator | null>(null);
   const tmBreakoutRenderRef = useRef<RenderedIndicator | null>(null);
   const tmMomentumRenderRef = useRef<RenderedIndicator | null>(null);
@@ -168,16 +191,26 @@ export function PriceChart({ symbol, timeframe }: Props) {
   const [lastValues, setLastValues] = useState<LastValues>({});
   const [paneOffsets, setPaneOffsets] = useState<PaneOffset[]>([]);
   const [measure, setMeasure] = useState<MeasureState>(INITIAL_MEASURE);
+  const [hover, setHover] = useState<HoverInfo | null>(null);
   const [renderTick, setRenderTick] = useState(0);
   const tmStrategyPaneIdx = 1 + (indicators.rsi ? 1 : 0) + (indicators.macd ? 1 : 0) + (indicators.atr ? 1 : 0);
   const measureRef = useRef(measure);
-  measureRef.current = measure;
+    measureRef.current = measure;
+  
+    // Preload heavy libraries in parallel with first render
+    useEffect(() => { preloadBarData(); preloadIndicators(); }, []);
 
   const { candles, loading, candlesRef } = useChartData(symbol, timeframe);
 
   useChartWS(symbol, timeframe, (c) => {
     candlesRef.current = [...candlesRef.current, c];
-    if (candleSeriesRef.current) candleSeriesRef.current.update(c);
+    if (candleSeriesRef.current) candleSeriesRef.current.update({
+      time: c.time as UTCTimestamp,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+    });
   }, (tick) => {
     setLastPrice({ value: tick.close, pct: tick.pct });
   });
@@ -656,21 +689,23 @@ export function PriceChart({ symbol, timeframe }: Props) {
     if (tool !== "measure") setMeasure(INITIAL_MEASURE);
   }, [tool]);
 
-  function updateTmIndicators(streaming = false) {
-  try {
-    if (!barDataRef.current) {
-      const bars = candlesRef.current as unknown as Bar[];
+  async function updateTmIndicators(streaming = false) {
+    try {
+      if (!barDataRef.current) {
+        const bars = candlesRef.current as unknown as Bar[];
+        if (bars.length < 50) return;
+        const BarDataClass = await getBarData();
+        barDataRef.current = BarDataClass.from(bars);
+      }
+      if (!barDataRef.current) return;
+      const bars = barDataRef.current.bars;
       if (bars.length < 50) return;
-      barDataRef.current = BarData.from(bars);
-    }
-    const bars = barDataRef.current.bars;
-    if (bars.length < 50) return;
 
     if (!indicators.tmStrategy && !indicators.tmTrend && !indicators.tmBreakout && !indicators.tmMomentum && !indicators.tmVolatility) return;
 
     // Update Turtle_Miura composite indicator
     if (indicators.tmStrategy && chartRef.current) {
-      const result = turtleMiuraIndicator(barDataRef.current, {
+      const result = turtleMiuraIndicator(barDataRef.current!, {
         trend: { smaPeriod: config.tmSmaPeriod },
         breakout: { rangePeriod: config.tmRangePeriod, volumeMult: config.tmVolumeMult },
         momentum: { rsiPeriod: config.tmRsiPeriod },
@@ -704,7 +739,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
     // Individual component indicators (overlay on main pane)
     // Trend overlay
     if (indicators.tmTrend && chartRef.current && !tmTrendRenderRef.current) {
-      const result = trendIndicator(barDataRef.current, { smaPeriod: config.tmSmaPeriod });
+      const result = trendIndicator(barDataRef.current!, { smaPeriod: config.tmSmaPeriod });
       if (result) {
         tmTrendRenderRef.current = renderIndicatorResult(chartRef.current, result, 0);
       }
@@ -712,13 +747,13 @@ export function PriceChart({ symbol, timeframe }: Props) {
       removeRenderedIndicator(chartRef.current, tmTrendRenderRef.current);
       tmTrendRenderRef.current = null;
     } else if (indicators.tmTrend && tmTrendRenderRef.current && chartRef.current && streaming) {
-      const result = trendIndicator(barDataRef.current, { smaPeriod: config.tmSmaPeriod });
+      const result = trendIndicator(barDataRef.current!, { smaPeriod: config.tmSmaPeriod });
       if (result) updateLastRenderedBar(tmTrendRenderRef.current, result);
     }
 
     // Breakout overlay
     if (indicators.tmBreakout && chartRef.current && !tmBreakoutRenderRef.current) {
-      const result = breakoutIndicator(barDataRef.current, { rangePeriod: config.tmRangePeriod, volumeMult: config.tmVolumeMult });
+      const result = breakoutIndicator(barDataRef.current!, { rangePeriod: config.tmRangePeriod, volumeMult: config.tmVolumeMult });
       if (result) {
         tmBreakoutRenderRef.current = renderIndicatorResult(chartRef.current, result, 0);
       }
@@ -726,13 +761,13 @@ export function PriceChart({ symbol, timeframe }: Props) {
       removeRenderedIndicator(chartRef.current, tmBreakoutRenderRef.current);
       tmBreakoutRenderRef.current = null;
     } else if (indicators.tmBreakout && tmBreakoutRenderRef.current && chartRef.current && streaming) {
-      const result = breakoutIndicator(barDataRef.current, { rangePeriod: config.tmRangePeriod, volumeMult: config.tmVolumeMult });
+      const result = breakoutIndicator(barDataRef.current!, { rangePeriod: config.tmRangePeriod, volumeMult: config.tmVolumeMult });
       if (result) updateLastRenderedBar(tmBreakoutRenderRef.current, result);
     }
 
     // Momentum (separate pane)
     if (indicators.tmMomentum && chartRef.current && !tmMomentumRenderRef.current) {
-      const result = momentumIndicator(barDataRef.current, { rsiPeriod: config.tmRsiPeriod });
+      const result = momentumIndicator(barDataRef.current!, { rsiPeriod: config.tmRsiPeriod });
       if (result) {
         const paneIdx = indicators.tmStrategy ? tmStrategyPaneIdx + 1 : tmStrategyPaneIdx;
         tmMomentumRenderRef.current = renderIndicatorResult(chartRef.current, result, paneIdx);
@@ -741,13 +776,13 @@ export function PriceChart({ symbol, timeframe }: Props) {
       removeRenderedIndicator(chartRef.current, tmMomentumRenderRef.current);
       tmMomentumRenderRef.current = null;
     } else if (indicators.tmMomentum && tmMomentumRenderRef.current && chartRef.current && streaming) {
-      const result = momentumIndicator(barDataRef.current, { rsiPeriod: config.tmRsiPeriod });
+      const result = momentumIndicator(barDataRef.current!, { rsiPeriod: config.tmRsiPeriod });
       if (result) updateLastRenderedBar(tmMomentumRenderRef.current, result);
     }
 
     // Volatility (separate pane)
     if (indicators.tmVolatility && chartRef.current && !tmVolatilityRenderRef.current) {
-      const result = volatilityIndicator(barDataRef.current, { atrPeriod: config.tmAtrPeriod, thresholdMult: config.tmAtrThreshold });
+      const result = volatilityIndicator(barDataRef.current!, { atrPeriod: config.tmAtrPeriod, thresholdMult: config.tmAtrThreshold });
       if (result) {
         const paneIdx = indicators.tmStrategy ? tmStrategyPaneIdx + 1 : tmStrategyPaneIdx;
         tmVolatilityRenderRef.current = renderIndicatorResult(chartRef.current, result, paneIdx);
@@ -756,7 +791,7 @@ export function PriceChart({ symbol, timeframe }: Props) {
       removeRenderedIndicator(chartRef.current, tmVolatilityRenderRef.current);
       tmVolatilityRenderRef.current = null;
     } else if (indicators.tmVolatility && tmVolatilityRenderRef.current && chartRef.current && streaming) {
-      const result = volatilityIndicator(barDataRef.current, { atrPeriod: config.tmAtrPeriod, thresholdMult: config.tmAtrThreshold });
+      const result = volatilityIndicator(barDataRef.current!, { atrPeriod: config.tmAtrPeriod, thresholdMult: config.tmAtrThreshold });
       if (result) updateLastRenderedBar(tmVolatilityRenderRef.current, result);
     }
 
@@ -927,7 +962,8 @@ export function PriceChart({ symbol, timeframe }: Props) {
         const klines = await fetchKlines(symbol, timeframe, 1000);
         if (cancelled) return;
         candlesRef.current = klines;
-        barDataRef.current = BarData.from(klines as unknown as Bar[]);
+        const BarDataClass = await getBarData();
+        barDataRef.current = BarDataClass.from(klines as unknown as Bar[]);
         setCandlesState(klines);
         if (candleSeriesRef.current) {
           candleSeriesRef.current.setData(
@@ -969,10 +1005,10 @@ export function PriceChart({ symbol, timeframe }: Props) {
         }
 
         const ws = getBinanceWS();
-        unsub = ws.subscribeKline({
+        unsub = ws.subscribeKline(
           symbol,
-          interval: timeframe,
-          onCandle: (k) => {
+          timeframe,
+          (k: Candle) => {
             if (!candleSeriesRef.current) return;
             const arr = candlesRef.current;
             const lastCandle = arr[arr.length - 1];
@@ -1017,8 +1053,8 @@ export function PriceChart({ symbol, timeframe }: Props) {
               value: k.close,
               pct: prev && prev.close !== 0 ? ((k.close - prev.close) / prev.close) * 100 : 0,
             });
-          },
-        });
+          }
+        );
       } catch (e) {
         console.error("Failed to load chart data:", e);
       }

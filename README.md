@@ -41,6 +41,13 @@
 - 🖥️ **HLines rendering** — reference price levels (RSI 30/50/70, etc.) rendered as price lines
 - 🌐 100% client-side — static deploy on Vercel/Cloudflare
 
+### Performance
+- 🧩 **Bundle splitting** — `next/dynamic` lazy loading for PriceChart, IndicatorSettingsDialog, RightSidebar, Watchlist
+- 🦴 **Skeleton loaders** — animated placeholders (ChartSkeleton, SidebarSkeleton, DialogSkeleton) while components load
+- ⚡ **Preload pattern** — oakscriptJS (~50KB) and lightweight-charts-indicators (~30KB) loaded in parallel with first render
+- 📊 **Bundle analyzer** — `@next/bundle-analyzer` integrated (`ANALYZE=true npm run build`)
+- 🚫 **SSR disabled** for chart components — no unnecessary server-side hydration
+
 ---
 
 ## 🚀 Getting Started
@@ -66,7 +73,8 @@ Open [http://localhost:3000](http://localhost:3000).
 | State | Zustand (with persist middleware) |
 | Icons | lucide-react |
 | Data | Binance Public REST + WebSocket |
-| Testing | Vitest |
+| Testing | Vitest (57 tests) |
+| Bundle Analysis | @next/bundle-analyzer |
 
 ---
 
@@ -100,7 +108,7 @@ src/
 │   │   ├── PairSelector.tsx        # Multi-select pair picker
 │   │   ├── SignalDetailPanel.tsx   # Expandable signal breakdown
 │   │   └── RelativeStrengthView.tsx # Ranking view
-│   └── ui/                         # shadcn primitives
+│   └── ui/ # shadcn primitives (incl. skeleton.tsx)
 ├── lib/
 │   ├── binance/
 │   │   ├── rest.ts                 # klines / ticker / exchangeInfo
@@ -108,7 +116,7 @@ src/
 │   │   ├── ticker.ts               # All USDT tickers
 │   │   └── types.ts
 │   ├── indicators/
-│   │   └── index.ts                # Legacy indicators (LWC-indicators)
+│   │   └── index.ts # Indicators (LWC-indicators) with preload pattern
 │   ├── oakscript/
 │   │   ├── index.ts                # OakScriptJS barrel
 │   │   ├── renderer.ts             # IndicatorResult → LWC series
@@ -131,7 +139,21 @@ src/
 npm test
 ```
 
-Integration tests cover the full pipeline: candle data → indicator calculation → signal scoring → ranking.
+57 tests covering: oakscript indicators (trend, momentum, volatility, breakout, turtle-miura, relative-strength), signal engine integration, and security (API proxy, WebSocket, pair selector).
+
+---
+
+## 🗺️ Roadmap
+
+| Phase | Focus | Status |
+|-------|-------|--------|
+| **1** | Core dashboard, charts, indicators | ✅ 100% |
+| **2** | Performance & scalability | 🔄 26% |
+| **3** | Advanced features (drawing, backtest, multi-TF) | 🔄 60% |
+| **4** | UX/UI & accessibility | ⬜ 0% |
+| **5** | PWA & mobile | ⬜ 0% |
+
+See detailed roadmaps: [`docs/roadmap.md`](docs/roadmap.md) · [`docs/roadmap-phase2.md`](docs/roadmap-phase2.md) · [`docs/roadmap-phase3.md`](docs/roadmap-phase3.md) · [`docs/roadmap-phase4.md`](docs/roadmap-phase4.md) · [`docs/roadmap-phase5.md`](docs/roadmap-phase5.md)
 
 ---
 

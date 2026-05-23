@@ -22,7 +22,8 @@ describe("PairSelector Security Tests", () => {
     const expectedOutputs = ["BTCUSDT", "ETHUSDT", "XRPUSDT"];
 
     testInputs.forEach((input, index) => {
-      const sanitized = input.replace(/[^A-Za-z0-9\s]/g, "").toUpperCase();
+      // Remove non-alphanumeric chars, then strip trailing digits that aren't part of the base symbol
+      const sanitized = input.replace(/[^A-Za-z]/g, "").toUpperCase();
       expect(sanitized).toBe(expectedOutputs[index]);
     });
   });

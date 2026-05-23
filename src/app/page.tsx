@@ -1,12 +1,26 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Header } from "@/components/layout/Header";
 import { LeftSidebar } from "@/components/layout/LeftSidebar";
-import { RightSidebar } from "@/components/layout/RightSidebar";
 import { BottomPanel } from "@/components/layout/BottomPanel";
-import { PriceChart } from "@/components/chart/PriceChart";
-import { IndicatorSettingsDialog } from "@/components/chart/IndicatorSettingsDialog";
+import { ChartSkeleton, SidebarSkeleton } from "@/components/ui/skeleton";
 import { useChartStore } from "@/lib/store/chart-store";
+
+const PriceChart = dynamic(
+  () => import("@/components/chart/PriceChart").then((m) => ({ default: m.PriceChart })),
+  { loading: () => <ChartSkeleton />, ssr: false },
+);
+
+const IndicatorSettingsDialog = dynamic(
+  () => import("@/components/chart/IndicatorSettingsDialog").then((m) => ({ default: m.IndicatorSettingsDialog })),
+  { ssr: false },
+);
+
+const RightSidebar = dynamic(
+  () => import("@/components/layout/RightSidebar").then((m) => ({ default: m.RightSidebar })),
+  { loading: () => <SidebarSkeleton /> },
+);
 
 export default function HomePage() {
   const symbol = useChartStore((s) => s.symbol);

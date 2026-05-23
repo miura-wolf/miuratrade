@@ -12,6 +12,10 @@ describe("Binance API Proxy Security Tests", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mockFetch.mockReset();
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ test: "data" }),
+    });
     request = new NextRequest("http://localhost:3000/api/binance/klines?symbol=BTCUSDT&interval=1m");
   });
 
@@ -61,7 +65,7 @@ describe("Binance API Proxy Security Tests", () => {
   });
 
   it("should validate batch symbols", async () => {
-    const symbols = JSON.stringify(["BTCUSDT", "ETHUSDT", "INVALID"]);
+    const symbols = JSON.stringify(["BTCUSDT", "ETHUSDT", "invalid_symbol"]);
     request = new NextRequest("http://localhost:3000/api/binance/ticker/24hr?symbols=" + symbols);
     const { GET } = await import("../../app/api/binance/[...path]/route.ts");
     response = await GET(request);

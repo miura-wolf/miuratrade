@@ -1,4 +1,4 @@
-Si"use client";
+"use client";
 
 import { useEffect, useRef } from "react";
 import { getBinanceWS } from "@/lib/binance/ws";
@@ -11,20 +11,28 @@ export function useChartWS(
   onCandle: (c: Candle) => void,
   onTick: (tick: { symbol: string; close: number; open: number; pct: number }) => void
 ) {
+  const onCandleRef = useRef(onCandle);
+  onCandleRef.current = onCandle;
+  const onTickRef = useRef(onTick);
+  onTickRef.current = onTick;
+
   useEffect(() => {
     const ws = getBinanceWS();
 
-    const unsubKline = ws.subscribeKline({
+    const unsubKline = ws.subscribeKline(
       symbol,
-      interval: timeframe,
-      onCandle,
-    });
+      timeframe,
+      (c) => onCandleRef.current(c),
+    );
 
-    const unsubTicker = ws.subscribeMiniTickers([symbol], onTick);
+    const unsubTicker = ws.subscribeMiniTickers(
+      [symbol],
+      (t) => onTickRef.current(t),
+    );
 
     return () => {
       unsubKline();
       unsubTicker();
     };
-  }, [symbol, timeframe, onCandle, onTick]);
+  }, [symbol, timeframe]);
 }

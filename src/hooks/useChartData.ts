@@ -13,7 +13,7 @@ export function useChartData(symbol: string, timeframe: Timeframe) {
     const controller = new AbortController();
     setLoading(true);
 
-    fetchKlines(symbol, timeframe, 500, { signal: controller.signal })
+    fetchKlines(symbol, timeframe, 500)
       .then((data) => {
         candlesRef.current = data;
         setCandles(data);

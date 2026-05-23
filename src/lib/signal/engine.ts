@@ -1,6 +1,8 @@
-// Signal Engine — stub implementation
+// Signal Engine — full implementation using oakscript indicators
 import type { Bar } from "oakscriptjs";
 import type { SignalState, ComponentScores } from "@/lib/oakscript/indicators";
+import { turtleMiuraIndicator } from "@/lib/oakscript/indicators/turtle-miura";
+import { relativeStrength, rankByRelativeStrength } from "@/lib/oakscript/indicators/relative-strength";
 
 export type { SignalState };
 
@@ -23,29 +25,48 @@ export function evaluateSignal(
   candles: Bar[],
   _options?: Record<string, unknown>,
 ): SignalResult | null {
-  if (candles.length === 0) return null;
+  if (candles.length < 30) return null;
 
-  // Basic implementation to replace stub
+  const miura = turtleMiuraIndicator(candles);
+  if (!miura) return null;
+
+  const rs = relativeStrength(symbol, candles);
+
   return {
     symbol,
-    score: 50,
-    state: "WATCH",
-    components: { trend: 0, breakout: 0, momentum: 0, volatility: 0 },
-    trend: 0,
-    breakout: 0,
-    momentum: 0,
-    volatility: 0,
-    rsScore: 0,
+    score: miura.score,
+    state: miura.state,
+    components: miura.components,
+    trend: miura.components.trend,
+    breakout: miura.components.breakout,
+    momentum: miura.components.momentum,
+    volatility: miura.components.volatility,
+    rsScore: rs?.rsScore ?? 0,
     rsRank: 0,
-    details: {},
+    details: miura.details,
   };
 }
 
 export function scanMarket(
-  pairs: { symbol: string; bars: Bar[] }[],
+  pairs: { symbol: string; bars?: Bar[]; candles?: Bar[] }[],
   _options?: Record<string, unknown>,
 ): SignalResult[] {
-  return pairs
-    .map((p) => evaluateSignal(p.symbol, p.bars))
+  const results = pairs
+    .map((p) => evaluateSignal(p.symbol, p.bars ?? p.candles ?? []))
     .filter((r): r is SignalResult => r !== null);
+
+  // Sort by score descending
+  results.sort((a, b) => b.score - a.score);
+
+  // Assign RS ranks
+  const rsRanked = rankByRelativeStrength(
+    pairs.map((p) => ({ symbol: p.symbol, bars: p.bars ?? p.candles ?? [] })),
+  );
+
+  for (const r of results) {
+    const rank = rsRanked.findIndex((rr) => rr.symbol === r.symbol);
+    r.rsRank = rank >= 0 ? rank + 1 : results.length;
+  }
+
+  return results;
 }

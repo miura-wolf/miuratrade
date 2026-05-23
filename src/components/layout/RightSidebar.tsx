@@ -1,6 +1,12 @@
 "use client";
 
-import { Watchlist } from "@/components/watchlist/Watchlist";
+import dynamic from "next/dynamic";
+import { SidebarSkeleton } from "@/components/ui/skeleton";
+
+const Watchlist = dynamic(
+  () => import("@/components/watchlist/Watchlist").then((m) => ({ default: m.Watchlist })),
+  { loading: () => <SidebarSkeleton /> },
+);
 
 export function RightSidebar() {
   return (
