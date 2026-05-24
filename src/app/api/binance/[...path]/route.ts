@@ -159,10 +159,16 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-      const res = await fetch(url.toString(), {
+      // /ticker/24hr without symbol returns ~2.4MB (exceeds Next.js 2MB cache limit)
+      // so we skip caching for that case; otherwise use short revalidation
+      const isFullTicker = path === "/ticker/24hr" && !validatedParams.symbol;
+      const fetchOpts: RequestInit & { next?: { revalidate: number } } = {
         headers: { "User-Agent": "MiuraTrade/1.0" },
-        next: { revalidate: path === "/exchangeInfo" ? 3600 : 5 },
-      });
+        ...(isFullTicker
+          ? { cache: "no-store" as const }
+          : { next: { revalidate: path === "/exchangeInfo" ? 3600 : 5 } }),
+      };
+      const res = await fetch(url.toString(), fetchOpts);
 
       if (!res.ok) {
         return NextResponse.json(

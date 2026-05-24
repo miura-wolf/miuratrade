@@ -1,54 +1,68 @@
-strict_tdd: false
+schema: spec-driven
+
 context: |
-  tradingview-gratis is a Node.js/TypeScript, React, Next.js project.
-  Detected markers: package.json, tsconfig.json, npm package manager.
-  Package managers: npm.
-  No reliable test runner was detected; verify testing manually before enabling strict TDD.
-  Unit tests: none.
-  Integration tests: none.
-  E2E tests: none.
+  Tech stack: Next.js 16.2.6, React 19.2.4, TypeScript 5 (strict), Tailwind CSS 4
+  UI: shadcn/ui (base-nova), lucide-react, lightweight-charts 5.2.0
+  State: Zustand 5, SWR 2.2
+  Strategy: oakscriptjs 0.2.8 (Turtle_Miura engine)
+  Architecture: Next.js App Router, @/ path alias
+  Package manager: npm
+
+strict_tdd: false
+
 rules:
   proposal:
-    require_problem_statement: true
-  spec:
-    require_acceptance_criteria: true
+    - Include rollback plan for risky changes
+    - Identify affected modules/packages
+  specs:
+    - Use Given/When/Then format for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
   design:
-    require_tradeoffs: true
+    - Include sequence diagrams for complex flows
+    - Document architecture decisions with rationale
   tasks:
-    protect_review_workload: true
+    - Group tasks by phase (infrastructure, implementation, testing)
+    - Use hierarchical numbering (1.1, 1.2, etc.)
+    - Keep tasks small enough to complete in one session
   apply:
-    test_command: ""
+    - Follow existing code patterns and conventions
+    - Load relevant coding skills for the project stack
   verify:
-    test_command: ""
+    - Run tests if test infrastructure exists
+    - Compare implementation against every spec scenario
+  archive:
+    - Warn before merging destructive deltas (large removals)
+
 testing:
-  detected: "2026-05-17"
+  detected: "2026-05-23"
   runner:
-    command: ""
-    framework: ""
+    command: "npm run test"
+    framework: "vitest"
   layers:
-    unit: ""
-    integration: ""
-    e2e: ""
+    unit: "vitest"
+    integration: "NOT INSTALLED"
+    e2e: "NOT INSTALLED"
   commands:
     unit:
-      []
-    integration:
-      []
-    e2e:
-      []
+      - scope: "src"
+        command: "npm run test"
+        framework: "vitest"
+    integration: []
+    e2e: []
   coverage:
-    command: ""
-    commands:
-      []
+    command: "npx vitest run --coverage"
+    available: false
+
 quality:
   lint: "npm run lint"
   lint_commands:
     - scope: "."
       command: "npm run lint"
-      framework: "linter"
-  typecheck: ""
+      framework: "eslint"
+  typecheck: "npx tsc --noEmit"
   typecheck_commands:
-    []
+    - scope: "."
+      command: "npx tsc --noEmit"
+      framework: "tsc"
   format: ""
-  format_commands:
-    []
+  format_commands: []
