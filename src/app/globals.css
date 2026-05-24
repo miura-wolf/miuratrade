@@ -27,67 +27,98 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  /* TradingView signature colors */
-  --color-tv-bg: #131722;
-  --color-tv-panel: #1e222d;
-  --color-tv-panel-hover: #2a2e39;
-  --color-tv-border: #2a2e39;
-  --color-tv-text: #d1d4dc;
-  --color-tv-text-muted: #787b86;
-  --color-tv-text-dim: #50535e;
-  --color-tv-green: #26a69a;
-  --color-tv-red: #ef5350;
-  --color-tv-blue: #2962ff;
-  --color-tv-yellow: #ffb74d;
-  --color-tv-purple: #ab47bc;
+  /* MiuraTrade palette (synced with MiuraUI) */
+  --color-tv-bg: var(--tv-bg);
+  --color-tv-panel: var(--tv-panel);
+  --color-tv-panel-hover: var(--tv-panel-hover);
+  --color-tv-border: var(--tv-border);
+  --color-tv-text: var(--tv-text);
+  --color-tv-text-muted: var(--tv-text-muted);
+  --color-tv-text-dim: var(--tv-text-dim);
+  --color-tv-green: var(--tv-green);
+  --color-tv-red: var(--tv-red);
+  --color-tv-blue: var(--tv-blue);
+  --color-tv-yellow: var(--tv-yellow);
+  --color-tv-purple: var(--tv-purple);
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
 }
 
-:root {
-  /* Force TradingView dark theme as the only theme */
-  --background: #131722;
-  --foreground: #d1d4dc;
-  --card: #1e222d;
-  --card-foreground: #d1d4dc;
-  --popover: #1e222d;
-  --popover-foreground: #d1d4dc;
-  --primary: #2962ff;
-  --primary-foreground: #ffffff;
-  --secondary: #2a2e39;
-  --secondary-foreground: #d1d4dc;
-  --muted: #1e222d;
-  --muted-foreground: #787b86;
-  --accent: #2a2e39;
-  --accent-foreground: #d1d4dc;
-  --destructive: #ef5350;
-  --border: #2a2e39;
-  --input: #2a2e39;
-  --ring: #2962ff;
+/* ═══ Dark Theme (MiuraUI palette) ═══ */
+
+:root,
+.dark {
+  --background: #0a0a0f;
+  --foreground: #f4f4f5;
+  --card: #0f0f16;
+  --card-foreground: #f4f4f5;
+  --popover: #0d0d14;
+  --popover-foreground: #f4f4f5;
+  --primary: #eab308;
+  --primary-foreground: #09090b;
+  --secondary: #111118;
+  --secondary-foreground: #a1a1aa;
+  --muted: #111118;
+  --muted-foreground: #a1a1aa;
+  --accent: #111118;
+  --accent-foreground: #f4f4f5;
+  --destructive: #ef4444;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.08);
+  --ring: #eab308;
   --radius: 0.375rem;
+
+  /* TradingView colors — MiuraUI palette */
+  --tv-bg: #0a0a0f;
+  --tv-panel: #0d0d14;
+  --tv-panel-hover: #111118;
+  --tv-border: rgba(255, 255, 255, 0.08);
+  --tv-text: #f4f4f5;
+  --tv-text-muted: #a1a1aa;
+  --tv-text-dim: #52525b;
+  --tv-green: #22c55e;
+  --tv-red: #ef4444;
+  --tv-blue: #3b82f6;
+  --tv-yellow: #eab308;
+  --tv-purple: #7c3aed;
 }
 
-.dark {
-  --background: #131722;
-  --foreground: #d1d4dc;
-  --card: #1e222d;
-  --card-foreground: #d1d4dc;
-  --popover: #1e222d;
-  --popover-foreground: #d1d4dc;
-  --primary: #2962ff;
+/* ═══ Light Theme ═══ */
+
+.light {
+  --background: #f4f4f5;
+  --foreground: #09090b;
+  --card: #ffffff;
+  --card-foreground: #09090b;
+  --popover: #ffffff;
+  --popover-foreground: #09090b;
+  --primary: #ca8a04;
   --primary-foreground: #ffffff;
-  --secondary: #2a2e39;
-  --secondary-foreground: #d1d4dc;
-  --muted: #1e222d;
-  --muted-foreground: #787b86;
-  --accent: #2a2e39;
-  --accent-foreground: #d1d4dc;
-  --destructive: #ef5350;
-  --border: #2a2e39;
-  --input: #2a2e39;
-  --ring: #2962ff;
+  --secondary: #e4e4e7;
+  --secondary-foreground: #3f3f46;
+  --muted: #e4e4e7;
+  --muted-foreground: #52525b;
+  --accent: #e4e4e7;
+  --accent-foreground: #09090b;
+  --destructive: #dc2626;
+  --border: rgba(0, 0, 0, 0.1);
+  --input: rgba(0, 0, 0, 0.1);
+  --ring: #ca8a04;
+
+  --tv-bg: #f4f4f5;
+  --tv-panel: #ffffff;
+  --tv-panel-hover: #e4e4e7;
+  --tv-border: rgba(0, 0, 0, 0.1);
+  --tv-text: #09090b;
+  --tv-text-muted: #3f3f46;
+  --tv-text-dim: #a1a1aa;
+  --tv-green: #16a34a;
+  --tv-red: #dc2626;
+  --tv-blue: #2563eb;
+  --tv-yellow: #ca8a04;
+  --tv-purple: #7c3aed;
 }
 
 @layer base {
@@ -98,25 +129,26 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    transition: background-color 200ms ease, color 200ms ease;
   }
   html {
     @apply font-sans;
   }
 
-  /* Custom scrollbar — thin, TV-like */
+  /* Custom scrollbar — thin, adapts to theme */
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
   ::-webkit-scrollbar-track {
-    background: #131722;
+    background: var(--tv-bg);
   }
   ::-webkit-scrollbar-thumb {
-    background: #2a2e39;
+    background: var(--tv-border);
     border-radius: 4px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #363a45;
+    background: var(--tv-text-dim);
   }
 }
 
@@ -124,4 +156,16 @@
   .tabular-nums {
     font-variant-numeric: tabular-nums;
   }
+}
+
+/* ═══ Selection ═══ */
+::selection {
+  background-color: rgba(234, 179, 8, 0.3);
+  color: var(--tv-text);
+}
+
+/* ═══ Focus ═══ */
+*:focus-visible {
+  outline: 2px solid rgba(234, 179, 8, 0.5);
+  outline-offset: 2px;
 }
